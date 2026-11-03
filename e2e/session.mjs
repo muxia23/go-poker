@@ -29,16 +29,6 @@ await join(bob, "bob", table);
 await sit(bob, 2);
 await until(() => last(aRec)?.players.length === 2);
 
-// a third tab can't take a name that's in use
-const eve = await open(browser);
-await eve.goto(URL);
-await eve.fill("#username", "ALICE");
-await eve.fill("#tablename", table);
-await eve.click(btn("join"));
-check("duplicate name rejected on join form", await has(eve, "text=name already taken"));
-await shot(eve, "1-name-taken");
-await eve.context().close();
-
 await alice.click(btn("start"));
 await until(() => last(aRec)?.betting && last(bRec)?.betting);
 await shot(alice, "2-alice-hand1");
@@ -67,7 +57,7 @@ const bobStack = last(aRec).players.find((p) => p.name === "bob").stack;
 const welcomes = bRec.welcomes;
 await bob.reload();
 const rejoined = await until(() => bRec.welcomes > welcomes && last(bRec).players.some((p) => p.name === "bob") && cardsShown(last(bRec), "bob"), 5000);
-check("reload reclaims the seat with its cards", rejoined && (await gone(bob, "#username")));
+check("reload reclaims the seat with its cards", rejoined && (await gone(bob, "#tablename")));
 check("stack kept after reload", last(aRec).players.find((p) => p.name === "bob").stack === bobStack);
 await shot(bob, "4-bob-after-reload");
 

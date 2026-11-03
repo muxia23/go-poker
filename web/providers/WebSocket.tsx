@@ -13,6 +13,7 @@ import type {
     Welcome,
 } from "../interfaces/server";
 import { joinTable, leaveTable } from "../actions/actions";
+import { basePath, redirectIfLoggedOut } from "../lib/account";
 import { inviteLink } from "../lib/invite";
 import { toast } from "../lib/toast";
 import { play, playEvent } from "../lib/sound";
@@ -72,18 +73,22 @@ export function SocketProvider(props: SocketProviderProps) {
         }
         // NEXT_PUBLIC_WS_URL points next dev at the go server, otherwise same origin
         const wsUrl =
-            process.env.NEXT_PUBLIC_WS_URL || `${window.location.origin.replace("http", "ws")}/ws`;
+            process.env.NEXT_PUBLIC_WS_URL || `${window.location.origin.replace("http", "ws")}${basePath}/ws`;
 
         let ws: WebSocket;
         let retry: ReturnType<typeof setTimeout>;
         let delay = 1000;
         let stopped = false;
         let wasOpen = false;
+        let refused = 0; // connection attempts in a row that never opened
 
         // connect, and reconnect with backoff whenever the connection drops
         const connect = () => {
             ws = new WebSocket(wsUrl);
+            let opened = false;
             ws.onopen = () => {
+                opened = true;
+                refused = 0;
                 delay = 1000;
                 dispatch({ type: "setConnection", payload: "open" });
                 if (wasOpen) {
@@ -101,6 +106,10 @@ export function SocketProvider(props: SocketProviderProps) {
                     return;
                 }
                 setSocket(null);
+                // a dropped connection just retries, but being turned away can mean the login ended
+                if (!opened && ++refused >= 2) {
+                    redirectIfLoggedOut();
+                }
                 if (wasOpen) {
                     dispatch({ type: "setConnection", payload: "reconnecting" });
                 }

@@ -13,10 +13,12 @@ type Command interface {
 }
 
 // Join adds a person. The runtime picks ID; a Token that reclaims a seat
-// rejoins as that seat's person instead, without the password.
+// rejoins as that seat's person instead, without the password. So does an
+// Account already at the table, from wherever it connects now.
 type Join struct {
 	ID       string
 	Name     string
+	Account  string // who logged in, empty only in tests
 	Token    string
 	Password string
 }

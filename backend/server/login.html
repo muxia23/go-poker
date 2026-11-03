@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>登录</title>
+<style>
+:root { color-scheme: light dark; --bg:#f5f5f3; --card:#fff; --fg:#1c1c1e; --muted:#6b6b70; --line:#d9d9dc; --accent:#0a7a55; --err:#c0342b; }
+@media (prefers-color-scheme: dark) { :root { --bg:#17181a; --card:#222326; --fg:#f1f1f2; --muted:#a0a0a6; --line:#3a3b3f; --accent:#2fb589; --err:#ff7b72; } }
+* { box-sizing: border-box; }
+body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:16px; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
+main { width:100%; max-width:360px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:24px; }
+h1 { margin:0 0 16px; font-size:22px; }
+nav { display:flex; gap:4px; margin-bottom:16px; }
+nav button { flex:1; background:none; color:var(--muted); border:0; border-bottom:2px solid var(--line); border-radius:0; min-height:44px; font-weight:600; }
+nav button[aria-selected="true"] { color:var(--fg); border-color:var(--accent); }
+label { display:block; margin-bottom:12px; font-size:14px; color:var(--muted); }
+input { display:block; width:100%; margin-top:4px; min-height:44px; padding:8px 12px; font-size:16px; color:var(--fg); background:transparent; border:1px solid var(--line); border-radius:8px; }
+button { font:inherit; cursor:pointer; }
+#submit { width:100%; min-height:44px; margin-top:4px; color:#fff; background:var(--accent); border:0; border-radius:8px; font-weight:600; }
+#submit:disabled { opacity:.6; }
+#error { min-height:21px; margin:0 0 8px; font-size:14px; color:var(--err); }
+p.hint { margin:0 0 12px; font-size:14px; color:var(--muted); }
+[hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="title">登录</h1>
+  <nav id="tabs" role="tablist">
+    <button type="button" role="tab" id="tab-login" aria-selected="true">登录</button>
+    <button type="button" role="tab" id="tab-register" aria-selected="false">注册</button>
+  </nav>
+  <p class="hint" id="hint" hidden>这是首次登录或临时密码，请先设置新密码。</p>
+  <form id="form">
+    <label id="f-username">用户名<input id="username" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="20"></label>
+    <label id="f-password"><span id="password-label">密码</span><input id="password" name="password" type="password" autocomplete="current-password" maxlength="72"></label>
+    <label id="f-invite" hidden>邀请码<input id="invite" name="invite" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+    <p id="error" role="alert"></p>
+    <button id="submit" type="submit">登录</button>
+  </form>
+</main>
+<script>
+const next = __NEXT__;
+let mode = __MUST_CHANGE__ ? "change" : "login";
+const el = (id) => document.getElementById(id);
+
+function show(m) {
+  mode = m;
+  const titles = { login: "登录", register: "注册", change: "设置新密码" };
+  el("title").textContent = titles[m];
+  el("submit").textContent = titles[m];
+  el("error").textContent = "";
+  el("tabs").hidden = m === "change";
+  el("hint").hidden = m !== "change";
+  el("f-username").hidden = m === "change";
+  el("f-invite").hidden = m !== "register";
+  el("password-label").textContent = m === "login" ? "密码" : "新密码（至少 8 个字符）";
+  el("password").autocomplete = m === "login" ? "current-password" : "new-password";
+  el("password").value = m === "change" ? "" : el("password").value;
+  el("tab-login").setAttribute("aria-selected", String(m === "login"));
+  el("tab-register").setAttribute("aria-selected", String(m === "register"));
+}
+
+el("tab-login").onclick = () => show("login");
+el("tab-register").onclick = () => show("register");
+
+el("form").onsubmit = async (e) => {
+  e.preventDefault();
+  const body = { password: el("password").value };
+  if (mode !== "change") body.username = el("username").value.trim();
+  if (mode === "register") body.invite = el("invite").value.trim();
+  const path = { login: "auth/login", register: "auth/register", change: "auth/password" }[mode];
+  el("submit").disabled = true;
+  el("error").textContent = "";
+  try {
+    const res = await fetch("/poker/api/" + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const out = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      el("error").textContent = out.error || "请求失败，请重试";
+      return;
+    }
+    if (out.account && out.account.mustChange) {
+      show("change");
+      return;
+    }
+    location.replace(next + location.hash);
+  } catch {
+    el("error").textContent = "连接失败，请检查网络后重试";
+  } finally {
+    el("submit").disabled = false;
+  }
+};
+
+show(mode);
+</script>
+</body>
+</html>

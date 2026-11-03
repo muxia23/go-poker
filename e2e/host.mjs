@@ -46,11 +46,11 @@ await alice.keyboard.press("Escape");
 check("escape cancels removing", (await alice.locator("[role=dialog]").count()) === 0 && (await rowHas(alice, "bob", "playing")));
 await manage(alice, "bob", "remove from table");
 await alice.click(`[role=dialog] ${btn("remove")}`);
-check("a removed player is back at the join form", await has(bob, "#username"));
+check("a removed player is back at the join form", await has(bob, "#tablename"));
 check("they're told why", await has(bob, "text=the host removed you from the table"));
 check("they're listed as left", await rowHas(alice, "bob", "left"));
 await bob.reload();
-check("a removed player doesn't rejoin on reload", await has(bob, "#username"));
+check("a removed player doesn't rejoin on reload", await has(bob, "#tablename"));
 
 // bomb pots are off, and the host tab goes straight to them in the settings
 await panel(alice, "host");

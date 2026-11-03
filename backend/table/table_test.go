@@ -503,3 +503,55 @@ func TestLine(t *testing.T) {
 func hidden(cards []holdem.Card) bool {
 	return !slices.ContainsFunc(cards, func(c holdem.Card) bool { return c != 0 })
 }
+
+func TestAccountTakesOverFromAnotherDevice(t *testing.T) {
+	h := newHarness(t, DefaultSettings, "secret")
+	h.ok(Join{ID: "x", Name: "a", Account: "acct", Password: "secret"})
+	h.ok(TakeSeat{Person: "x", Seat: 1, BuyIn: 1000})
+	res := h.ok(Join{ID: "y", Name: "a", Account: "acct"}) // no password needed
+	if res.Joined == nil || res.Joined.ID != "x" || !res.Joined.Reclaimed {
+		t.Fatalf("got %+v", res.Joined)
+	}
+	if len(h.s.People) != 1 || h.s.People["x"].Seat != 1 {
+		t.Fatalf("people %+v", h.s.People)
+	}
+}
+
+func TestAccountKeepsItsNameAtTheTable(t *testing.T) {
+	h := newHarness(t, DefaultSettings, "")
+	h.ok(Join{ID: "x", Name: "old", Account: "acct"})
+	h.ok(Join{ID: "z", Name: "stay", Account: "other"})
+	h.ok(Leave{Person: "x"})
+	// they renamed while away, and come back as who the ledger knows
+	res := h.ok(Join{ID: "y", Name: "new", Account: "acct"})
+	if res.Joined.Name != "old" || h.s.People["y"].Name != "old" {
+		t.Fatalf("got %+v", res.Joined)
+	}
+}
+
+func TestAccountCantTakeAnothersNameAtTheTable(t *testing.T) {
+	h := newHarness(t, DefaultSettings, "")
+	h.ok(Join{ID: "x", Name: "old", Account: "acct"})
+	h.ok(Join{ID: "z", Name: "stay", Account: "other"})
+	h.ok(Leave{Person: "x"})
+	// someone else took the freed name, but the ledger's "old" isn't theirs
+	if res := h.do(Join{ID: "y", Name: "OLD", Account: "third"}); res.Joined != nil {
+		t.Fatal("inherited another account's name at the table")
+	}
+}
+
+func TestAccountsSurviveSaving(t *testing.T) {
+	h := newHarness(t, DefaultSettings, "")
+	h.ok(Join{ID: "x", Name: "a", Account: "acct"})
+	b, err := json.Marshal(h.s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got State
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Accounts["acct"] != "a" || got.People["x"].Account != "acct" {
+		t.Fatalf("got %+v %+v", got.Accounts, got.People["x"])
+	}
+}

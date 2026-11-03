@@ -43,7 +43,7 @@ func newTestServerHub(t *testing.T, store Store) (*httptest.Server, *Hub) {
 	hub := newHub(store)
 	go hub.run()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		serveWs(hub, w, r)
+		serveWs(hub, w, r, nil)
 	}))
 	t.Cleanup(srv.Close)
 	return srv, hub
@@ -76,6 +76,11 @@ func dial(t *testing.T, srv *httptest.Server) *client {
 	if err != nil {
 		t.Fatal(err)
 	}
+	return readClient(t, conn)
+}
+
+// readClient keeps what the server sends on conn.
+func readClient(t *testing.T, conn *websocket.Conn) *client {
 	t.Cleanup(func() { conn.Close() })
 	c := &client{t, conn, make(chan msg, 1000), 2 * time.Second}
 	go func() {

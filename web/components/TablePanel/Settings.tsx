@@ -114,7 +114,6 @@ export default function Settings() {
             <Section title="access">
                 <Rows
                     rows={[
-                        ["public", s.public ? "yes" : "no"],
                         ["password", onOff(game.hasPassword)],
                         ["approve rebuys", onOff(s.approveRebuys)],
                     ]}

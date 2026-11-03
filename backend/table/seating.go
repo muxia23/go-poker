@@ -22,6 +22,27 @@ func (r *reducer) join(j Join) error {
 			}
 		}
 	}
+	if j.Account != "" {
+		for _, p := range s.People {
+			if p.Account == j.Account {
+				p.Connected = true
+				r.cancel(graceTimer(p.ID))
+				r.res.Grace = "reconnected"
+				r.log("%s reconnected", p.Name)
+				r.res.Joined = &Joined{ID: p.ID, Name: p.Name, Reclaimed: true}
+				return nil
+			}
+		}
+		if name, ok := s.Accounts[j.Account]; ok {
+			j.Name = name
+		} else {
+			for _, name := range s.Accounts {
+				if strings.EqualFold(name, j.Name) {
+					return ErrNameTaken
+				}
+			}
+		}
+	}
 	switch {
 	case s.Password != "" && j.Password == "":
 		return ErrNeedPassword
@@ -31,7 +52,13 @@ func (r *reducer) join(j Join) error {
 		return ErrNameTaken
 	}
 
-	s.People[j.ID] = &Person{ID: j.ID, Name: j.Name, Connected: true}
+	s.People[j.ID] = &Person{ID: j.ID, Name: j.Name, Account: j.Account, Connected: true}
+	if j.Account != "" {
+		if s.Accounts == nil {
+			s.Accounts = map[string]string{}
+		}
+		s.Accounts[j.Account] = j.Name
+	}
 	if s.Host == "" {
 		s.Host = j.Name
 	}

@@ -1,6 +1,6 @@
 // Settings tab: everyone at the table can read how the host set it up, and the
 // host can change it.
-import { URL, btn, check, create, finish, fold, launch, open, panel, shot, sit, until } from "./lib.mjs";
+import { URL, btn, check, create, finish, fold, launch, open, panel, shot, sit, until, signIn } from "./lib.mjs";
 
 const row = (p, label) => p.locator(`[aria-label="table settings"] dl > div:has(dt:text-is("${label}")) > dd`).innerText();
 const table = "settings" + Date.now();
@@ -19,8 +19,9 @@ await create(host, "host", table, async (p) => {
 
 // a phone-sized player joins through the invite link
 const p = await open(browser, { viewport: { width: 390, height: 844 } });
-await p.goto(`${URL}/?table=${table}#pw=s3cret`);
-await p.fill("#username", "dan");
+await signIn(p, "dan");
+await p.goto(`${URL}?table=${table}#pw=s3cret`);
+await p.waitForSelector("#password");
 await p.press("#password", "Enter");
 await p.waitForSelector("text=Open");
 check("header shows the stakes", (await p.locator("header").innerText()).includes("25/50"));
@@ -61,8 +62,9 @@ check("the invite link has the new password", newInvite.endsWith("#pw=n3w"), new
 
 // a new player joins with it, and both sit down
 const eve = await open(browser);
-await eve.goto(`${URL}/?table=${table}#pw=n3w`);
-await eve.fill("#username", "eve");
+await signIn(eve, "eve");
+await eve.goto(`${URL}?table=${table}#pw=n3w`);
+await eve.waitForSelector("#password");
 await eve.press("#password", "Enter");
 check("the new password lets eve in", await eve.waitForSelector("text=Open").then(() => true, () => false));
 await host.click('[aria-label="close table panel"]');

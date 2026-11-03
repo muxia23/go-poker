@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/evanofslack/go-poker/auth"
 	"github.com/evanofslack/go-poker/table"
 )
 
@@ -31,6 +32,10 @@ type Hub struct {
 
 	store  Store
 	timing table.Timing
+	auth   *auth.Service // nil only in tests, which skip the login
+
+	kicks  chan string   // account ids to disconnect, handled by run
+	counts chan chan int // asks run how many clients there are
 
 	started     time.Time
 	audits      chan AuditEntry    // waiting to be written by writeAudits
@@ -43,6 +48,8 @@ func newHub(store Store) *Hub {
 		register:    make(chan *Client),
 		unregister:  make(chan *Client),
 		stop:        make(chan chan []*Client),
+		kicks:       make(chan string),
+		counts:      make(chan chan int),
 		tables:      make(map[string]*tableActor),
 		conns:       make(map[string]int),
 		store:       store,
@@ -61,6 +68,14 @@ func (h *Hub) run() {
 			h.registerClient(client)
 		case client := <-h.unregister:
 			h.unregisterClient(client)
+		case id := <-h.kicks:
+			for c := range h.clients {
+				if c.account != nil && c.account.ID == id {
+					c.conn.Close() // readPump sees it and disconnects as usual
+				}
+			}
+		case reply := <-h.counts:
+			reply <- len(h.clients)
 		case reply := <-h.stop:
 			h.stopping = true
 			var clients []*Client
@@ -85,6 +100,32 @@ func (h *Hub) unregisterClient(client *Client) {
 		delete(h.clients, client)
 		close(client.send)
 	}
+}
+
+// kick disconnects all of an account's connections.
+func (h *Hub) kick(id string) { h.kicks <- id }
+
+func (h *Hub) clientCount() int {
+	reply := make(chan int, 1)
+	h.counts <- reply
+	return <-reply
+}
+
+// accountAtTable says whether an account is at an open table, seated, watching
+// or waiting out their reconnect grace.
+func (h *Hub) accountAtTable(id string) bool {
+	for _, a := range h.allTables() {
+		at := false
+		a.inspect(func() {
+			for _, p := range a.state.People {
+				at = at || p.Account == id
+			}
+		})
+		if at {
+			return true
+		}
+	}
+	return false
 }
 
 // maxTables caps how many tables can exist at once.

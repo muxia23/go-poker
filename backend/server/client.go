@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/evanofslack/go-poker/auth"
 	"github.com/evanofslack/go-poker/holdem"
 	"github.com/evanofslack/go-poker/table"
 	"github.com/google/uuid"
@@ -35,14 +36,15 @@ var upgrader = websocket.Upgrader{
 
 // Client is a middleman between the websocket connection and the hub.
 type Client struct {
-	hub   *Hub
-	conn  *websocket.Conn // Websocket connection
-	send  chan []byte     // Buffered channel of outbound bytes
-	quit  chan struct{}   // closed by the hub on shutdown
-	done  chan struct{}   // closed when writePump returns
-	ip    string          // remote address, counted against the per-ip limits
-	id    string          // names the connection in the audit
-	since time.Time       // when it connected
+	hub     *Hub
+	conn    *websocket.Conn // Websocket connection
+	send    chan []byte     // Buffered channel of outbound bytes
+	quit    chan struct{}   // closed by the hub on shutdown
+	done    chan struct{}   // closed when writePump returns
+	ip      string          // remote address, counted against the per-ip limits
+	id      string          // names the connection in the audit
+	since   time.Time       // when it connected
+	account *auth.Account   // who logged in; nil only in tests, which skip the login
 
 	// owned by readPump
 	table  *tableActor // the table joined, nil before
@@ -50,16 +52,17 @@ type Client struct {
 
 }
 
-func newClient(conn *websocket.Conn, hub *Hub, ip string) *Client {
+func newClient(conn *websocket.Conn, hub *Hub, ip string, account *auth.Account) *Client {
 	c := &Client{
-		hub:   hub,
-		conn:  conn,
-		send:  make(chan []byte, 1024),
-		ip:    ip,
-		id:    uuid.NewString()[:8],
-		since: time.Now(),
-		quit:  make(chan struct{}),
-		done:  make(chan struct{}),
+		hub:     hub,
+		conn:    conn,
+		send:    make(chan []byte, 1024),
+		ip:      ip,
+		account: account,
+		id:      uuid.NewString()[:8],
+		since:   time.Now(),
+		quit:    make(chan struct{}),
+		done:    make(chan struct{}),
 	}
 	return c
 }
@@ -172,7 +175,9 @@ func (c *Client) write(message []byte) error {
 }
 
 // serveWs handles websocket requests from the peer.
-func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
+// serveWs connects account to the game. Server.serveWebsocket has checked the
+// login; only tests pass a nil account.
+func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request, account *auth.Account) {
 	ip := clientIP(r, trustProxy)
 	if ok, limit := hub.reserveConn(ip); !ok {
 		limitHits.WithLabelValues(limit).Inc()
@@ -186,7 +191,7 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		return
 	}
-	client := newClient(conn, hub, ip)
+	client := newClient(conn, hub, ip, account)
 
 	client.hub.register <- client
 
@@ -248,7 +253,11 @@ func (c *Client) processEvents(in Inbound) error {
 		return c.join(in, in.Action == ActionCreateTable)
 	case ActionListTables:
 		// carries nothing to validate; readPump's rate limit covers polling
-		c.send <- marshal(Tables{ActionTables, c.hub.publicTables()})
+		tables := []table.Summary{}
+		if c.account == nil {
+			tables = c.hub.publicTables()
+		}
+		c.send <- marshal(Tables{ActionTables, tables})
 		return nil
 	}
 
@@ -334,6 +343,12 @@ func (c *Client) command(in Inbound) (table.Command, error) {
 		case !validBuyIn(in.Amount):
 			return nil, c.refuse("invalid buy-in")
 		}
+		if c.account != nil {
+			// the ledger goes by name, so a bot can't pass for someone
+			if taken, err := c.hub.auth.UsernameTaken(name); err != nil || taken {
+				return nil, c.refuse("that name belongs to an account")
+			}
+		}
 		return table.AddBot{Person: p, Seat: in.Seat, BuyIn: uint(in.Amount), Name: name, Level: in.Level}, nil
 	case ActionRemoveBot:
 		return table.RemoveBot{Person: p, Seat: in.Seat}, nil
@@ -367,6 +382,9 @@ func (c *Client) command(in Inbound) (table.Command, error) {
 		if in.Settings == nil || json.Unmarshal(in.Settings, &settings) != nil {
 			return nil, c.refuse("invalid settings")
 		}
+		if c.account != nil {
+			settings.Public = false
+		}
 		return table.UpdateSettings{Person: p, Settings: settings}, nil
 	case ActionSetPassword:
 		if !validPassword(in.Password) {
@@ -385,6 +403,18 @@ func (c *Client) command(in Inbound) (table.Command, error) {
 // join creates or joins the table in names, leaving any table c is at.
 func (c *Client) join(in Inbound, create bool) error {
 	username := strings.TrimSpace(in.Username)
+	accountID := ""
+	if c.account != nil {
+		// read it fresh: a role or name may have changed since connecting
+		account, err := c.hub.auth.Get(c.account.ID)
+		switch {
+		case err != nil || account.Disabled || account.MustChange:
+			return c.refuse("not logged in")
+		case create && !account.CanCreateTables():
+			return c.refuse("only admins can create tables")
+		}
+		username, accountID = account.Username, account.ID
+	}
 	if !validLength(in.Tablename, maxTablenameLen) {
 		return c.refuse("invalid table name")
 	}
@@ -402,6 +432,9 @@ func (c *Client) join(in Inbound, create bool) error {
 		if err := settings.Validate(); err != nil {
 			return c.refuse(err.Error())
 		}
+		if c.account != nil {
+			settings.Public = false
+		}
 	}
 
 	if c.table != nil {
@@ -418,7 +451,7 @@ func (c *Client) join(in Inbound, create bool) error {
 	if err != nil {
 		return c.refuse(err.Error())
 	}
-	r := a.ask(table.Join{ID: uuid.New().String(), Name: username, Token: in.Token, Password: in.Password}, c)
+	r := a.ask(table.Join{ID: uuid.New().String(), Name: username, Account: accountID, Token: in.Token, Password: in.Password}, c)
 	if r.err != nil {
 		return c.refuse(r.err.Error())
 	}

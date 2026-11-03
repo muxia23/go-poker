@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/evanofslack/go-poker/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -29,6 +31,8 @@ type Server struct {
 	router    *chi.Mux
 	hub       *Hub
 	staticDir string
+	auth      *auth.Service
+	limiter   *auth.Limiter
 	ready     atomic.Bool // false once shutdown starts
 	stop      context.CancelFunc
 
@@ -43,6 +47,9 @@ type Server struct {
 
 func New() (*Server, error) {
 	loadConfig()
+	if databaseURL == "" {
+		return nil, errors.New("DATABASE_URL is required: accounts have to be kept somewhere")
+	}
 	port := getPort()
 	addr := ":" + port
 
@@ -58,7 +65,18 @@ func New() (*Server, error) {
 		ln.Close()
 		return nil, err
 	}
+	db, ok := store.(interface{ DB() *sql.DB })
+	if !ok {
+		ln.Close()
+		return nil, errors.New("accounts need a sql database")
+	}
+	accounts := auth.New(db.DB())
+	if err := accounts.EnsureRoot(os.Getenv("ROOT_USERNAME"), os.Getenv("ROOT_PASSWORD")); err != nil {
+		ln.Close()
+		return nil, fmt.Errorf("create root from ROOT_USERNAME and ROOT_PASSWORD: %w", err)
+	}
 	hub := newHub(store)
+	hub.auth = accounts
 	if err := hub.restore(context.Background()); err != nil {
 		ln.Close()
 		return nil, err
@@ -75,12 +93,15 @@ func New() (*Server, error) {
 		router:    chi.NewRouter(),
 		hub:       hub,
 		staticDir: getStaticDir(),
+		auth:      accounts,
+		limiter:   auth.NewLimiter(loginAttempts, loginWindow),
 	}
 
 	s.ready.Store(true)
 	s.server.Handler = s.router
 	s.mountMiddleware()
 	s.mountSocket()
+	s.mountAuth()
 	s.mountStatus()
 	s.mountStatic()
 
@@ -106,6 +127,23 @@ func New() (*Server, error) {
 	}
 
 	return s, nil
+}
+
+// ResetRoot gives root a temporary password from the command line. A running
+// server's sessions end with it, as they're kept in the database.
+func ResetRoot(ctx context.Context) (username, password string, err error) {
+	loadConfig()
+	if databaseURL == "" {
+		return "", "", errors.New("DATABASE_URL is required")
+	}
+	store, err := openStore(ctx, databaseURL)
+	if err != nil {
+		return "", "", err
+	}
+	if c, ok := store.(io.Closer); ok {
+		defer c.Close()
+	}
+	return auth.New(store.(interface{ DB() *sql.DB }).DB()).ResetRoot()
 }
 
 // Run starts the hub and http server, and returns a channel that receives
@@ -217,15 +255,26 @@ func (s *Server) ping(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) mountSocket() {
-	s.router.Route("/ws", func(r chi.Router) { r.Get("/", s.serveWebsocket) })
+	s.router.Get(basePath+"/ws", s.serveWebsocket)
 }
 
 func (s *Server) serveWebsocket(w http.ResponseWriter, r *http.Request) {
-	serveWs(s.hub, w, r)
+	account, err := s.auth.Authenticate(cookieToken(r))
+	switch {
+	case errors.Is(err, auth.ErrNoSession) || err == nil && account.MustChange:
+		http.Error(w, "not logged in", http.StatusUnauthorized)
+	case err != nil:
+		slog.Default().Error("check session", "error", err)
+		http.Error(w, "accounts unavailable", http.StatusServiceUnavailable)
+	default:
+		serveWs(s.hub, w, r, &account)
+	}
 }
 
 func (s *Server) mountStatic() {
-	s.router.Handle("/*", staticHandler(s.staticDir, true))
+	site := s.requirePageLogin(http.StripPrefix(basePath, staticHandler(s.staticDir, true)))
+	s.router.Handle(basePath, site)
+	s.router.Handle(basePath+"/*", site)
 }
 
 // staticHandler serves the static site in dir. hideAdmin leaves out the admin

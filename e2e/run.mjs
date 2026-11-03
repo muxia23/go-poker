@@ -2,6 +2,7 @@
 // each script's output in one piece as it finishes: node run.mjs [script...]
 import { spawn } from "node:child_process";
 import { readdirSync } from "node:fs";
+import { launch, setRootPassword } from "./lib.mjs";
 
 const jobs = Number(process.env.JOBS) || 4;
 // the slowest go first, so they don't hold up the end
@@ -19,6 +20,10 @@ for (const s of named) {
         process.exit(1);
     }
 }
+const browser = await launch();
+await setRootPassword(browser);
+await browser.close();
+
 const scripts = (named.length ? named : all).sort((a, b) => rank(a) - rank(b));
 function rank(s) {
     const i = slow.indexOf(s);

@@ -10,8 +10,8 @@ import "../styles/index.css";
 function MyApp({ Component, pageProps, router }: AppProps) {
     return (
         <MantineProvider theme={theme} cssVariablesResolver={resolver} defaultColorScheme="auto">
-            {router.pathname === "/admin" ? (
-                // the admin page reads the admin API, not the game's websocket
+            {router.pathname === "/admin" || router.pathname === "/accounts" ? (
+                // these pages read their own APIs, not the game's websocket
                 <Component {...pageProps} />
             ) : (
                 <AppStoreProvider>

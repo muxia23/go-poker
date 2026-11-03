@@ -98,8 +98,9 @@ func adminRouter(h *Hub, staticDir string) http.Handler {
 		writeJSON(w, nonNil(entries))
 	})
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/admin", http.StatusFound)
+		http.Redirect(w, r, "/poker/admin", http.StatusFound)
 	})
+	r.Handle("/poker/*", http.StripPrefix("/poker", staticHandler(staticDir, false)))
 	r.Handle("/*", staticHandler(staticDir, false))
 	return r
 }

@@ -79,7 +79,7 @@ export const defaultForm: SettingsForm = {
     seats: 8,
     turnTime: 30000,
     nextHandDelay: 5000,
-    public: true,
+    public: false,
     approveRebuys: false,
     ante: 0,
     sevenDeuce: 0,

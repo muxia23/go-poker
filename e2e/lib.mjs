@@ -1,7 +1,10 @@
 // Shared helpers for the e2e scripts.
 import { chromium } from "playwright-core";
 
-export const URL = process.env.URL || "http://localhost:8099";
+export const URL = process.env.URL || "http://localhost:8099/poker";
+export const ROOT_USER = process.env.ROOT_USERNAME || "root";
+export const ROOT_PASSWORD = process.env.ROOT_PASSWORD || "e2e-root-password";
+const TEST_PASSWORD = "e2e-password";
 
 // btn selects a button by its exact text. :text-is only sees an element's own text, and a
 // Mantine button keeps its label in a span, so it also matches a button holding one.
@@ -40,6 +43,79 @@ export async function open(browser, context = {}) {
     return (await browser.newContext({ colorScheme: "dark", reducedMotion: "reduce", ...context })).newPage();
 }
 
+const api = (path) => `${new globalThis.URL(URL).origin}/poker/api${path}`;
+const posting = (data) => ({ data, headers: { Origin: new globalThis.URL(URL).origin }, failOnStatusCode: false });
+
+let rootSession;
+
+// setRootPassword does root's first login once, before scripts run at the same
+// time: setting a password ends root's other sessions.
+export async function setRootPassword(browser) {
+    await asRoot(browser);
+    rootSession = undefined;
+}
+
+// asRoot is a browser context logged in as root, who's made to set a password
+// on the first login, which then stays the one in ROOT_PASSWORD.
+export async function asRoot(browser) {
+    if (rootSession) return rootSession;
+    const ctx = await browser.newContext();
+    const r = await ctx.request.post(api("/auth/login"), posting({ username: ROOT_USER, password: ROOT_PASSWORD }));
+    if (!r.ok()) throw new Error(`root login: ${r.status()} ${await r.text()}`);
+    if ((await r.json()).account.mustChange) {
+        const c = await ctx.request.post(api("/auth/password"), posting({ password: ROOT_PASSWORD }));
+        if (!c.ok()) throw new Error(`root password: ${c.status()} ${await c.text()}`);
+    }
+    rootSession = ctx;
+    return ctx;
+}
+
+export async function newInvite(browser) {
+    const root = await asRoot(browser);
+    return (await (await root.request.post(api("/admin/invites"), posting({}))).json()).code;
+}
+
+export async function accountNamed(browser, name) {
+    const root = await asRoot(browser);
+    const { accounts } = await (await root.request.get(api("/admin/accounts"))).json();
+    return accounts.find((a) => a.username.toLowerCase() === name.toLowerCase());
+}
+
+export async function adminPost(browser, path, data = {}) {
+    const root = await asRoot(browser);
+    return root.request.post(api(path), posting(data));
+}
+
+// signIn logs page's context in as name, registering them the first time. They
+// can create tables, as most scripts need; accounts.mjs tests the roles.
+export async function signIn(page, name) {
+    const ctx = page.context();
+    if ((await ctx.request.get(api("/auth/me"), { failOnStatusCode: false })).ok()) return;
+    const browser = ctx.browser();
+    let r = await ctx.request.post(api("/auth/login"), posting({ username: name, password: TEST_PASSWORD }));
+    if (r.ok()) return;
+    r = await ctx.request.post(api("/auth/register"), posting({ username: name, password: TEST_PASSWORD, invite: await newInvite(browser) }));
+    if (r.status() === 409) {
+        // another script running alongside just registered this name
+        r = await ctx.request.post(api("/auth/login"), posting({ username: name, password: TEST_PASSWORD }));
+        if (r.ok()) return;
+    }
+    if (!r.ok()) throw new Error(`register ${name}: ${r.status()} ${await r.text()}`);
+    const account = await accountNamed(browser, name);
+    await adminPost(browser, `/admin/accounts/${account.id}/role`, { role: "admin" });
+}
+
+// visit logs page in as name and opens url at the join form, ready to join: the table from an
+// invite link is filled in and the socket is up.
+export async function visit(page, name, url = URL) {
+    await signIn(page, name);
+    await page.goto(url);
+    await page.waitForSelector("#tablename");
+    const table = new globalThis.URL(url).searchParams.get("table");
+    if (table) await until(async () => (await page.inputValue("#tablename")) === table);
+    if (table) await page.waitForSelector(`${btn("join")}:not([disabled])`);
+}
+
 // confirmCreate creates the table from the settings dialog
 export async function confirmCreate(page) {
     await page.click(btn("create table"));
@@ -49,8 +125,8 @@ export async function confirmCreate(page) {
 // set: setup(page) adjusts the settings dialog first, true keeps the defaults.
 // The page goes to the home page first unless it's already on one.
 async function enter(page, name, table, setup) {
+    await signIn(page, name);
     if (page.url() === "about:blank") await page.goto(URL);
-    await page.fill("#username", name);
     await page.fill("#tablename", table);
     await page.click(btn(setup ? "create" : "join"));
     if (typeof setup === "function") {

@@ -50,7 +50,7 @@ e2e *scripts: install
     # short timers, which the scripts read too
     export RECONNECT_GRACE=20s BOT_DELAY=100ms
     # every browser connects from one address; seated players' tables outlive a script by the reconnect grace
-    PORT=8099 STATIC_DIR=web/out MAX_TABLES_PER_IP=200 MAX_CONNS_PER_IP=200 METRICS_ADDR= ADMIN_ADDR=localhost:8098 "$bin" >/dev/null 2>&1 &
+    DATABASE_URL="sqlite:$(dirname "$bin")/e2e.db" ROOT_USERNAME=root ROOT_PASSWORD=e2e-root-password LOGIN_ATTEMPTS=100000 PORT=8099 STATIC_DIR=web/out MAX_TABLES_PER_IP=200 MAX_CONNS_PER_IP=200 METRICS_ADDR= ADMIN_ADDR=localhost:8098 "$bin" >/dev/null 2>&1 &
     # restart.mjs runs its own server from the same binary
     export BIN="$bin"
     server=$!

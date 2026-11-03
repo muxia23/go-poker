@@ -1,5 +1,5 @@
 // Host session controls: pause and resume, ending the session after the hand, and the final settle-up.
-import { URL, btn, check, finish, gone, has, launch, open, panel, seat, shot } from "./lib.mjs";
+import { URL, btn, check, finish, gone, has, launch, open, panel, seat, shot, visit } from "./lib.mjs";
 
 const hostTab = `[aria-label="table"] ${btn("host")}`;
 const hostMenu = async (p, item) => {
@@ -48,8 +48,7 @@ check("the host tab is gone", (await alice.locator(hostTab).count()) === 0);
 
 // a late spectator can still read it
 const carol = await open(browser);
-await carol.goto(URL);
-await carol.fill("#username", "carol");
+await visit(carol, "carol");
 await carol.fill("#tablename", table);
 await carol.click(btn("join"));
 check("a late joiner sees the settle-up", await has(carol, "[role=dialog] >> text=the session is over"));

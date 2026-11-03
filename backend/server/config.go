@@ -28,6 +28,7 @@ var (
 // parse is logged and the default kept.
 func loadConfig() {
 	envInt("MAX_TABLES", &maxTables)
+	envInt("LOGIN_ATTEMPTS", &loginAttempts)
 	envInt("MAX_MESSAGES_PER_SECOND", &maxMessagesPerSecond)
 	envInt("MAX_CONNS", &maxConns)
 	envInt("MAX_CONNS_PER_IP", &maxConnsPerIP)

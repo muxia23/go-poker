@@ -1,3 +1,4 @@
+import { basePath } from "./account";
 import { GameEvent } from "../interfaces";
 import { Prefs } from "./prefs";
 
@@ -54,7 +55,7 @@ function load(name: string) {
     if (!b) {
         const c = context();
         b = c
-            ? fetch(`/sounds/${name}.mp3`)
+            ? fetch(`${basePath}/sounds/${name}.mp3`)
                   .then((r) => r.arrayBuffer())
                   .then((data) => c.decodeAudioData(data))
                   .catch(() => null)

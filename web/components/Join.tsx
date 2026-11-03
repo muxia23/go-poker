@@ -1,4 +1,5 @@
 import React, { useCallback, useContext, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import { useSocket } from "../hooks/useSocket";
 import { AppContext } from "../providers/AppStore";
@@ -7,10 +8,9 @@ import ColorSchemeToggle from "./ColorSchemeToggle";
 import { joinTable } from "../actions/actions";
 import { ActionIcon, Button, PasswordInput, TextInput } from "@mantine/core";
 import { invitedPassword, invitedTable } from "../lib/invite";
+import { canCreateTables, logout, useAccount } from "../lib/account";
 import CreateTable from "./CreateTable";
-import PublicTables from "./PublicTables";
 import Features from "./Features";
-import { TableSummary } from "../interfaces";
 
 function randomTableGen(length: number): string {
     let chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -24,7 +24,8 @@ function randomTableGen(length: number): string {
 export default function Join() {
     const socket = useSocket();
     const { appState, dispatch } = useContext(AppContext);
-    const [username, setUsername] = useState("");
+    const { account } = useAccount();
+    const username = account?.username ?? "";
     const [tablename, setTablename] = useState("");
     const [password, setPassword] = useState("");
     const [invitedWithPassword, setInvitedWithPassword] = useState(false);
@@ -33,7 +34,7 @@ export default function Join() {
     let invalid = username == "" || tablename == "" || !connected;
     const showPassword = appState.needPassword || invitedWithPassword;
 
-    // an invite link fills in the table and any password, so only a name is needed. Wait for
+    // an invite link fills in the table and any password, so only joining is left. Wait for
     // the router, whose first replace of the URL would put the password back.
     const router = useRouter();
     useEffect(() => {
@@ -62,20 +63,6 @@ export default function Join() {
         setCreating(true);
     };
 
-    // picking a listed table joins it once there's a name, unless it needs a password
-    const handlePick = (t: TableSummary) => {
-        setTablename(t.name);
-        dispatch({ type: "setError", payload: null });
-        dispatch({ type: "setNeedPassword", payload: t.hasPassword });
-        if (socket && connected && username != "" && !t.hasPassword) {
-            joinTable(socket, t.name, username);
-        }
-    };
-
-    const handleUsername = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        setUsername(e.target.value);
-    }, []);
-
     const handleTablename = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         setTablename(e.target.value);
     }, []);
@@ -92,21 +79,23 @@ export default function Join() {
                 <h1 className="mb-10 text-4xl font-semibold text-fg sm:mb-16 sm:text-5xl">
                     GoPoker
                 </h1>
+                {account && (
+                    <p className="mb-4 flex items-center gap-3 text-sm text-muted">
+                        <span className="font-semibold text-fg">{account.username}</span>
+                        <Button component={Link} href="/accounts" variant="subtle" size="compact-xs">
+                            账号
+                        </Button>
+                        <Button variant="subtle" size="compact-xs" onClick={logout}>
+                            退出
+                        </Button>
+                    </p>
+                )}
                 <form
                     className="flex w-full max-w-xs flex-col gap-2 px-4 sm:w-auto sm:max-w-none sm:flex-row sm:gap-0 sm:px-0"
                     onSubmit={handleSubmit}
                 >
                     <TextInput
                         autoFocus
-                        size="md"
-                        className="sm:m-2"
-                        id="username"
-                        maxLength={20}
-                        value={username}
-                        placeholder="name"
-                        onChange={handleUsername}
-                    />
-                    <TextInput
                         size="md"
                         className="sm:my-2 sm:mr-2 sm:w-48"
                         id="tablename"
@@ -139,15 +128,17 @@ export default function Join() {
                             onChange={(e) => setPassword(e.target.value)}
                         />
                     )}
-                    <Button
-                        type="button"
-                        size="md"
-                        className="sm:my-2 sm:mr-2"
-                        disabled={invalid}
-                        onClick={handleCreate}
-                    >
-                        create
-                    </Button>
+                    {account && canCreateTables(account) && (
+                        <Button
+                            type="button"
+                            size="md"
+                            className="sm:my-2 sm:mr-2"
+                            disabled={invalid}
+                            onClick={handleCreate}
+                        >
+                            create
+                        </Button>
+                    )}
                     <Button type="submit" variant="filled" size="md" className="sm:my-2" disabled={invalid}>
                         join
                     </Button>
@@ -156,7 +147,6 @@ export default function Join() {
                     <p className="mt-2 px-4 text-center text-error">{appState.error}</p>
                 )}
                 {!connected && <p className="mt-2 text-subtle">connecting to server…</p>}
-                <PublicTables onPick={handlePick} />
                 {creating && (
                     <CreateTable
                         tablename={tablename}

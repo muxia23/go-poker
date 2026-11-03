@@ -55,6 +55,9 @@ func openStore(ctx context.Context, url string) (Store, error) {
 	return s, nil
 }
 
+// DB is the database, which accounts share with tables.
+func (s *sqlStore) DB() *sql.DB { return s.db }
+
 // sqlStore keeps tables in Postgres or SQLite. Both take the same SQL.
 type sqlStore struct {
 	db   *sql.DB

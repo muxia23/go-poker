@@ -42,7 +42,8 @@ var DefaultTiming = Timing{
 type Person struct {
 	ID        string `json:"id"`
 	Name      string `json:"name"`
-	Seat      int    `json:"seat"` // 0 when watching
+	Account   string `json:"account,omitempty"` // the account behind them
+	Seat      int    `json:"seat"`              // 0 when watching
 	Connected bool   `json:"connected"`
 }
 
@@ -103,9 +104,12 @@ type State struct {
 	EndedAt time.Time `json:"endedAt"` // zero until the session ends
 
 	People map[string]*Person `json:"people"` // by id
-	Seats  map[int]*Seat      `json:"seats"`  // by seat number
-	Host   string             `json:"host"`   // name
-	Banker string             `json:"banker"` // name, empty for the host
+	// Accounts is the name each account has at this table, kept after they
+	// leave: the ledger goes by name, so it stays theirs and nobody else's.
+	Accounts map[string]string `json:"accounts,omitempty"`
+	Seats    map[int]*Seat     `json:"seats"`  // by seat number
+	Host     string            `json:"host"`   // name
+	Banker   string            `json:"banker"` // name, empty for the host
 
 	Ledger   []LedgerEntry         `json:"ledger"`
 	Requests map[string]BuyRequest `json:"requests"` // by name

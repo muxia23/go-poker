@@ -1,6 +1,6 @@
 // The home page on desktop and phone, dark and light: the join form near the top, the
-// features under the public tables, and their demos answering clicks.
-import { URL, btn, check, finish, has, launch, open, shot } from "./lib.mjs";
+// features under it, and their demos answering clicks.
+import { URL, btn, check, finish, has, launch, open, shot, visit } from "./lib.mjs";
 
 const views = {
     desktop: { viewport: { width: 1280, height: 720 } },
@@ -18,13 +18,11 @@ const browser = await launch();
 for (const [kind, view] of Object.entries(views)) {
     for (const colorScheme of ["dark", "light"]) {
         const p = await open(browser, { ...view, colorScheme });
-        await p.goto(URL);
-        await p.waitForSelector("#username");
+        await visit(p, "homeviewer");
         const box = await p.evaluate(() => {
             const rect = (s) => document.querySelector(s).getBoundingClientRect();
             return {
                 form: rect("form").bottom,
-                tables: rect('[aria-label="public tables"]').bottom,
                 features: rect('[aria-label="features"]').top,
                 height: window.innerHeight,
                 width: window.innerWidth,
@@ -33,7 +31,7 @@ for (const [kind, view] of Object.entries(views)) {
         });
         const name = `${kind}, ${colorScheme}`;
         check(`${name}: form on the first screen`, box.form <= box.height, `bottom ${box.form}`);
-        check(`${name}: features under the tables`, box.features > box.tables, `top ${box.features}`);
+        check(`${name}: features under the form`, box.features > box.form, `top ${box.features}`);
         check(`${name}: no sideways scroll`, !box.wide);
         const toggle = await p.locator('[aria-label="light or dark"]').boundingBox();
         check(`${name}: scheme toggle top right`, toggle.y < 60 && toggle.x > box.width / 2, JSON.stringify(toggle));
@@ -49,7 +47,7 @@ for (const [kind, view] of Object.entries(views)) {
 
 // the demos, once
 const p = await open(browser, views.desktop);
-await p.goto(URL);
+await visit(p, "homeviewer");
 await p.waitForSelector("[data-games]");
 const count = () => p.locator(`${games} [role=img][aria-label*=" of "]`).count();
 check("hold'em deals 2", (await count()) === 2);

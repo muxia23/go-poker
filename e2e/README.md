@@ -32,7 +32,8 @@ protect what you run them on.
 | `ux.mjs` | toasts, reconnecting, the header, leaving |
 | `layout.mjs` | nine seats on desktop, laptop, tablet and phone screens; six, eight and four players on phones |
 | `bots.mjs` | adding, playing with and removing bots |
-| `lobby.mjs` | public tables on the home page: listing, order, lock, joining from the list |
+| `accounts.mjs` | registering with an invite, roles, renaming, another device, disabling |
+| `lobby.mjs` | no public tables: nothing listed, joining by room number |
 | `restart.mjs` | tables surviving a graceful restart mid-hand and a crash, on SQLite; runs its own server on :8097 |
 
 ## Setup

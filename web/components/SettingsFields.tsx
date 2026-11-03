@@ -186,13 +186,6 @@ export default function SettingsFields({ form, set, password, setPassword, seats
             </Section>
             <Section title="access">
                 <Toggle
-                    id="public"
-                    label="public"
-                    hint="listed on the home page for anyone to join"
-                    checked={form.public}
-                    onChange={(on) => set({ public: on })}
-                />
-                <Toggle
                     id="approveRebuys"
                     label="approve rebuys"
                     hint="you approve each rebuy and every return to the table"

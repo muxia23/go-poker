@@ -1,5 +1,5 @@
 // Players panel: everyone's status, chips in and out, settling up with the banker, and copying the ledger.
-import { URL, btn, check, finish, has, launch, open, panel, playerRow, seat, seatMenu, shot, until } from "./lib.mjs";
+import { URL, btn, check, finish, has, launch, open, panel, playerRow, seat, seatMenu, shot, until, visit } from "./lib.mjs";
 
 const rowHas = (p, name, text, ms) => until(async () => (await playerRow(p, name)).includes(text), ms);
 
@@ -8,9 +8,8 @@ const table = "players" + Date.now();
 const clipboard = { permissions: ["clipboard-read", "clipboard-write"] };
 const [alice, bob, dave] = await seat(browser, table, [{ name: "alice", context: clipboard }, "bob", "dave"]);
 const carol = await open(browser, { viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true });
-await carol.goto(`${URL}/?table=${table}`);
-await carol.fill("#username", "carol");
-await carol.press("#username", "Enter");
+await visit(carol, "carol", `${URL}?table=${table}`);
+await carol.press("#tablename", "Enter");
 await carol.waitForSelector("text=Open");
 
 await panel(alice, "players");

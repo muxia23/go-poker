@@ -5,20 +5,22 @@ import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { btn, check, create, finish, fold, join, last, launch, open, record, sit, until } from "./lib.mjs";
 
 if (!process.env.BIN) {
     console.log("BIN must name a server binary; just e2e sets it");
     process.exit(1);
 }
 const PORT = 8097;
-const URL = `http://localhost:${PORT}`;
+const URL = `http://localhost:${PORT}/poker`;
+// lib.mjs reads the address when it loads, so this script's server has to be set first
+process.env.URL = URL;
+const { btn, check, create, finish, fold, join, last, launch, open, record, sit, until, ROOT_USER, ROOT_PASSWORD } = await import("./lib.mjs");
 const db = path.join(mkdtempSync(path.join(tmpdir(), "poker-")), "poker.db");
 
 let server;
 async function start() {
     server = spawn(process.env.BIN, [], {
-        env: { ...process.env, PORT: String(PORT), STATIC_DIR: "../web/out", DATABASE_URL: "sqlite:" + db, METRICS_ADDR: "" },
+        env: { ...process.env, PORT: String(PORT), STATIC_DIR: "../web/out", DATABASE_URL: "sqlite:" + db, METRICS_ADDR: "", ADMIN_ADDR: "", ROOT_USERNAME: ROOT_USER, ROOT_PASSWORD },
         stdio: "ignore",
     });
     for (let i = 0; i < 50; i++) {
@@ -54,7 +56,6 @@ const aRec = record(alice);
 const bRec = record(bob);
 const table = "restart" + Date.now();
 
-for (const p of [alice, bob]) await p.goto(URL);
 await create(alice, "alice", table);
 await sit(alice, 1);
 await join(bob, "bob", table);
@@ -70,7 +71,7 @@ check("rejoined after a graceful restart", await restart("SIGTERM", [aRec, bRec]
 const back = last(aRec);
 check("seats kept", seats(back) === seats(mid), `${seats(mid)} then ${seats(back)}`);
 check("the hand carries on", back.hand === mid.hand && back.street === mid.street && aliceCards(back) === aliceCards(mid), `hand ${mid.hand} then ${back.hand}`);
-check("still at the table", (await alice.locator("#username").count()) === 0 && (await bob.locator("#username").count()) === 0);
+check("still at the table", (await alice.locator("#tablename").count()) === 0 && (await bob.locator("#tablename").count()) === 0);
 
 // finish the hand, and crash once the next one is dealt
 await fold([alice, bob]);

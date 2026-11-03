@@ -63,3 +63,8 @@ Realtime multiplayer poker: Go websocket server (`backend/`) + Next.js client (`
 
 ## Conventions
 - Commits: short, lowercase, imperative ("fix engine index panics").
+
+## 本 fork（私人站）
+- 目的：账号 + 邀请码 + root/admin/user 三级权限，只服务 `/poker`。设计 `docs/superpowers/specs/`，计划 `docs/superpowers/plans/`，账号代码 `backend/auth/`，接口 `backend/server/authhttp.go`，账号页 `web/pages/accounts.tsx`。
+- 本机编译：`CGO_ENABLED=0 GOPROXY=https://goproxy.cn,direct`。
+- 部署：`docker build` 出镜像后用 compose 运行，容器只监听 `127.0.0.1`，由反向代理只转发 `/poker`。

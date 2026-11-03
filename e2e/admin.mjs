@@ -1,23 +1,25 @@
 // Admin page: only on the admin address, it shows a table's people with their addresses, the
 // audit of what they did and tried, and the tables that closed.
-import { URL, btn, check, create, finish, has, launch, open, shot, sit, until } from "./lib.mjs";
+import { URL, btn, check, create, finish, has, launch, open, shot, sit, until, visit, signIn } from "./lib.mjs";
 const ADMIN = process.env.ADMIN_URL || "http://localhost:8098";
 const table = "admin" + Date.now();
 const browser = await launch();
 
-check("the public address doesn't serve it", (await fetch(`${URL}/admin`)).status === 404);
+const member = await open(browser);
+await signIn(member, "memberadmin");
+check("the public address doesn't serve it to a stranger", (await fetch(`${URL}/admin`, { redirect: "manual" })).status === 302);
+check("or to someone logged in", (await member.context().request.get(`${URL}/admin`, { failOnStatusCode: false })).status() === 404);
 
 await create(await open(browser), "host", table, (p) => p.fill("#tablePassword", "s3cret"));
 const intruder = await open(browser);
-await intruder.goto(`${URL}/?table=${table}`);
-await intruder.fill("#username", "mallory");
-await intruder.press("#username", "Enter");
+await visit(intruder, "mallory", `${URL}?table=${table}`);
+await intruder.press("#tablename", "Enter");
 await intruder.fill("#password", "guess");
 await intruder.press("#password", "Enter");
 await intruder.waitForSelector("text=wrong password");
 
 const p = await open(browser);
-await p.goto(`${ADMIN}/admin`);
+await p.goto(`${ADMIN}/poker/admin`);
 const row = `[aria-label="tables"] tr:has-text("${table}")`;
 check("the table is listed", await has(p, row, 6000));
 await p.click(row);

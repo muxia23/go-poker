@@ -1,11 +1,10 @@
 // Join form, create table dialog and buy-in form behavior.
-import { URL, btn, check, confirmCreate, finish, gone, has, launch, open, openRules, shot } from "./lib.mjs";
+import { URL, btn, check, confirmCreate, finish, gone, has, launch, open, openRules, shot, visit } from "./lib.mjs";
 const browser = await launch();
 const p = await open(browser);
 const table = "forms" + Date.now();
-await p.goto(URL);
-check("username has focus", await p.evaluate(() => document.activeElement?.id === "username"));
-await p.fill("#username", "carol");
+await visit(p, "carol");
+check("the table has focus", await p.evaluate(() => document.activeElement?.id === "tablename"));
 await p.fill("#tablename", table);
 await p.press("#tablename", "Enter");
 check("enter joins (no such table yet)", await has(p, "text=/no table|not found|doesn't exist|does not exist/i"));
@@ -48,8 +47,7 @@ check("enter sits down with the amount", await has(p, "text=1500"));
 
 // a taken name keeps the dialog open with the server's error
 const q = await open(browser);
-await q.goto(URL);
-await q.fill("#username", "dave");
+await visit(q, "dave");
 await q.fill("#tablename", table);
 await q.click(btn("create"));
 await confirmCreate(q);
@@ -57,8 +55,7 @@ check("taken table name shows in the dialog", await has(q, '[role="dialog"] >> t
 
 // custom settings carry through to the table, at phone width
 const r = await open(browser, { viewport: { width: 375, height: 667 } });
-await r.goto(URL);
-await r.fill("#username", "erin");
+await visit(r, "erin");
 await r.fill("#tablename", table + "c");
 await r.click(btn("create"));
 await r.click('label:has-text("custom")');

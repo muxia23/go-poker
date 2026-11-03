@@ -452,7 +452,7 @@ export default function Features() {
             data-motion={mounted ? appState.prefs.motion : undefined}
         >
             <h2 className="text-2xl font-semibold text-fg">poker with friends</h2>
-            <p className="mt-1 text-muted">no accounts, no downloads, just send a link.</p>
+            <p className="mt-1 text-muted">no downloads, just share a table link.</p>
             <ul className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <Games />
                 <Bots />
