@@ -7,7 +7,7 @@ install:
 
 # go server on :8080, accepting websockets from the web dev server, with the admin api on :2113
 backend:
-    cd backend && ALLOWED_ORIGINS=http://localhost:3000 ADMIN_ADDR=localhost:2113 ADMIN_ORIGINS=http://localhost:3000 go run ./cmd/go-poker
+    cd backend && DATABASE_URL=sqlite:dev.db ROOT_USERNAME=root ROOT_PASSWORD=change-me-now ALLOWED_ORIGINS=http://localhost:3000 ADMIN_ADDR=localhost:2113 ADMIN_ORIGINS=http://localhost:3000 go run ./cmd/go-poker
 
 # next dev server on :3000, connecting to the go server
 web: install
@@ -22,7 +22,7 @@ start:
 # production-like: static export served by the go server on :8080, the admin page on :2113
 serve: install
     cd web && npm run build
-    cd backend && STATIC_DIR=../web/out ADMIN_ADDR=localhost:2113 go run ./cmd/go-poker
+    cd backend && DATABASE_URL=sqlite:dev.db ROOT_USERNAME=root ROOT_PASSWORD=change-me-now STATIC_DIR=../web/out ADMIN_ADDR=localhost:2113 go run ./cmd/go-poker
 
 # format go code
 fmt:

@@ -1,30 +1,17 @@
 services:
   go-poker:
-    image: evanofslack/go-poker:latest
+    build: .
     container_name: go-poker
     restart: unless-stopped
     ports:
       - 8080:8080
     environment:
-      DATABASE_URL: postgres://poker:poker@postgres:5432/poker?sslmode=disable
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  postgres:
-    image: postgres:17-alpine
-    container_name: go-poker-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: poker
-      POSTGRES_PASSWORD: poker
-      POSTGRES_DB: poker
+      DATABASE_URL: sqlite:/data/poker.db
+      # only used on first start, to create root; you must change the password at first login
+      ROOT_USERNAME: root
+      ROOT_PASSWORD: change-me-now
     volumes:
-      - postgres:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "poker"]
-      interval: 2s
-      retries: 15
+      - poker-data:/data
 
 volumes:
-  postgres:
+  poker-data:

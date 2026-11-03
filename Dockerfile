@@ -12,7 +12,8 @@ RUN go build cmd/go-poker/main.go
 
 FROM alpine:3.24
 RUN apk --no-cache add ca-certificates && \
-    adduser -S -D -H -h /app appuser
+    adduser -S -D -H -h /app appuser && \
+    mkdir /data && chown appuser /data
 USER appuser
 WORKDIR /app
 
